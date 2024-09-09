@@ -1,9 +1,14 @@
 #!/usr/bin/env lua
 
 maxChars = 99
+auctionCode = "OVH.PA"
+auctionRegion = "FR"
+auctionLang = "fr-FR"
 
 function conky_main()
-    -- just to avoid error
+    if conky_window == nil then
+        return
+    end
 end
 
 function conky_cpu()
@@ -29,12 +34,29 @@ function conky_power()
 end
 
 function _query(url, method)
-    socket_http = require("socket.http")
+    -- http = require("socket.http")
+    http = require("ssl.https")
     local json = require("json")
 
-    local body = socket_http.request(url)
+    local fnret = ""
+    function collect(chunk)
+        if chunk ~= nil then
+            fnret = fnret .. chunk
+        end
+        return true
+    end
 
-    return json.decode(body)
+    local _, statusCode, headers, statusText = http.request {
+        url = url,
+        method = method,
+        headers = {
+            ["Accept"] = "application/json",
+            ["Accept-Language"] = "sk;q=0.8,en-US,en;q=0.6,cs;q=0.4",
+            ["Accept-Charset"] = "UTF-8;q=0.8,*;q=0.7"
+        },
+        sink = collect
+    }
+    return json.decode(fnret)
 end
 
 function _query_get(url)
@@ -73,6 +95,42 @@ function conky_version_gs()
     return version
 end
 
+function _round(num, decimalPlaces)
+    local mult = 10 ^ (decimalPlaces or 0)
+    return math.floor(num * mult + 0.5) / mult
+end
+
+function _currency2smbol(currency)
+    local currency2smbol = {
+        EUR = "€", --
+        DOL = "$"
+    }
+    if currency2smbol[currency] == nil then
+        return ""
+    end
+    return currency2smbol[currency]
+end
+
+function conky_auction()
+    local url = "https://query1.finance.yahoo.com/v8/finance/chart/" .. auctionCode .. "?region=" .. auctionRegion .. "&lang=" .. auctionLang .. "&interval=1m&range=1h"
+    local fnret = _query_get(url).chart.result
+
+    local regularMarketPrice = fnret[1].meta.regularMarketPrice
+    local previousClose = fnret[1].meta.previousClose
+    local currency = _currency2smbol(fnret[1].meta.currency)
+    local symbol = fnret[1].meta.symbol
+    local diff = _round(regularMarketPrice - previousClose, 2)
+    regularMarketPrice = _round(regularMarketPrice, 2)
+
+    if diff < 0 then
+        return regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font GE Inspira:pixelsize=12}${color FF0000}") .. diff .. currency .. conky_parse("${voffset 10}")
+    elseif diff > 0 then
+        return regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font GE Inspira:pixelsize=12}${color 00FF00}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}")
+    else
+        return regularMarketPrice .. currency
+    end
+end
+
 function _local_ip(version)
     local family = (version and "inet" .. (version == 6 and version or "") or "inet")
     local ips = {}
@@ -81,9 +139,9 @@ function _local_ip(version)
         local fnretIp4 = _query_get("https://api.ipify.org/?format=json")
         if fnretIp4 then
             ips[#ips + 1] = {
-                ip = fnretIp4.ip .. "/32",
+                value = fnretIp4.ip .. "/32",
                 version = 4,
-                ifname = "WAN"
+                key = "WAN"
             }
         end
     end
@@ -92,9 +150,9 @@ function _local_ip(version)
         local fnretIp6 = _query_get("https://api64.ipify.org/?format=json")
         if fnretIp6 then
             ips[#ips + 1] = {
-                ip = fnretIp6.ip .. "/128",
+                value = fnretIp6.ip .. "/128",
                 version = 6,
-                ifname = "WAN"
+                key = "WAN"
             }
         end
     end
@@ -106,19 +164,18 @@ function _local_ip(version)
             local if_name = net_interface.ifname
             local addr_infos = net_interface.addr_info
             for k, addr_info in ipairs(addr_infos) do
-                if addr_info["local"] ~= nil and addr_info.scope == "global" and
-                    (version == nil or addr_info.family == family) then
+                if addr_info["local"] ~= nil and addr_info.scope == "global" and (version == nil or addr_info.family == family) then
                     local ip = {}
-                    ip["ifname"] = if_name
+                    ip.key = if_name
                     if addr_info.label ~= nil then
-                        ip["ifname"] = addr_info.label
+                        ip.key = addr_info.label
                     end
                     if version == nil and addr_info.family == "inet6" then
-                        ip["version"] = 6
+                        ip.version = 6
                     elseif version == nil then
-                        ip["version"] = 4
+                        ip.version = 4
                     end
-                    ip["ip"] = addr_info["local"] .. "/" .. addr_info["prefixlen"]
+                    ip.value = addr_info["local"] .. "/" .. addr_info.prefixlen
                     ips[#ips + 1] = ip
                 end
             end
@@ -126,6 +183,21 @@ function _local_ip(version)
     end
 
     return ips
+end
+
+function _debug_dump(o)
+    if type(o) == "table" then
+        local s = "{ "
+        for k, v in pairs(o) do
+            if type(k) ~= "number" then
+                k = "\"" .. k .. "\""
+            end
+            s = s .. "[" .. k .. "] = " .. _dump(v) .. ","
+        end
+        return s .. "} "
+    else
+        return tostring(o)
+    end
 end
 
 function _table_has_value(tab, val)
@@ -152,7 +224,7 @@ end
 
 function _add_attribute_value(table, attribute, value)
     for _, item in ipairs(table) do
-        item[attribute] = (item["attribute"] and item["attribute"] or value)
+        item[attribute] = (item.attribute and item.attribute or value)
     end
     return table
 end
@@ -178,17 +250,16 @@ function _local_routes(version)
     local net_routes = _merge(net_routesv4, net_routesv6)
     table.sort(net_routes, _sort_routes)
     for k, net_route in ipairs(net_routes) do
-        if not _table_has_value(net_route.flags, "linkdown") and net_route.dev ~= "lo" and
-            (not version or net_route.version == version) then
+        if not _table_has_value(net_route.flags, "linkdown") and net_route.dev ~= "lo" and (not version or net_route.version == version) then
             local route = {}
-            route["ifname"] = net_route.dev
-            route["dst"] = net_route.dst
-            if route["dst"] == "default" then
-                route["dst"] = (net_route.version == 4 and "0.0.0.0/0" or "::/0")
+            route.key = net_route.dev
+            route.value = net_route.dst
+            if route.value == "default" then
+                route.value = (net_route.version == 4 and "0.0.0.0/0" or "::/0")
             end
-            route["metric"] = (net_route.metric and net_route.metric or 0)
+            route.metric = (net_route.metric and net_route.metric or 0)
             if not version then
-                route["version"] = net_route.version
+                route.version = net_route.version
             end
             routes[#routes + 1] = route
         end
@@ -196,13 +267,12 @@ function _local_routes(version)
     return routes
 end
 
-function _table_format(items, attribute, width)
+function _table_format(items, width)
     local str_output = ""
     width = (width and width or maxChars)
     local old_cursor_len = 0
     for _, item in ipairs(items) do
-        local cursor = conky_parse("${offset 8}${color 7764D8}") .. item.ifname .. conky_parse("$color${offset 8}") ..
-                           item[attribute] .. conky_parse("$color${offset 20}")
+        local cursor = conky_parse("${offset 8}${color 7764D8}") .. item.key .. conky_parse("$color${offset 8}") .. item.value .. conky_parse("$color${offset 20}")
         if old_cursor_len + #cursor > width then
             cursor = cursor .. "\n"
             old_cursor_len = 0
@@ -214,25 +284,11 @@ function _table_format(items, attribute, width)
 end
 
 function conky_local_ip()
-    return _table_format(_local_ip(), "ip")
-end
-
-function conky_local_ipv6()
-    return _table_format(_local_ip(6), "ip")
-end
-
-function conky_local_ipv4()
-    return _table_format(_local_ip(4), "ip")
+    return _table_format(_local_ip())
 end
 
 function conky_local_routes()
-    return _table_format(_local_routes(), "dst")
+    return _table_format(_local_routes())
 end
 
-function conky_local_routesv6()
-    return _table_format(_local_routes(6), "dst")
-end
-
-function conky_local_routesv4()
-    return _table_format(_local_routes(4), "dst")
-end
+_debug_dump(conky_auction())
