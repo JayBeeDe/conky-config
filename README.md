@@ -6,11 +6,12 @@ Lua helper for conky script
 
 ## Installation
 
-Clone this repo to `~/.config/conky/default`
+Clone this repo to `~/.config/conky/JayBeeDe`
 
 ```bash
 sudo apt-get install lua-json lua-socket
-git clone git@github.com:JayBeeDe/conky-scripts.git ~/.config/conky/default
+git clone git@github.com:JayBeeDe/conky-scripts.git ~/.config/conky/JayBeeDe
+ln -s ~/.config/conky/JayBeeDe ~/.config/conky/default
 ```
 
 Install required font dependency from third-part website:
@@ -26,7 +27,8 @@ rm -f "/tmp/ge-inspira.zip"
 Then start script with following command:
 
 ```bash
-conky --config=$HOME/.config/conky/default/default.conf --alignment=top_right -x 5
+cd $HOME/.config/conky/default
+conky --config=default.conf --alignment=top_right -x 5
 ```
 
 Make ajustements, when you are satisfied and that console doesn't show any dependencies issues, you can configure it to start automatically at session start by adding the following file into `~/.config/autostart/conky.desktop`:
@@ -34,7 +36,7 @@ Make ajustements, when you are satisfied and that console doesn't show any depen
 ```ini
 [Desktop Entry]
 DBusActivatable=false
-Exec=bash -c "conky --config=$HOME/.config/conky/default/default.conf --alignment=top_right -x 5 --daemonize 2>&1 >/dev/null"
+Exec=bash -c "cd $HOME/.config/conky/default; conky --config=default.conf --alignment=top_right -x 5 --daemonize 2>&1 >/dev/null"
 Icon=Conky
 Name=Conky
 Name[en_US]=Conky
