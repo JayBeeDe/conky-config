@@ -1,9 +1,27 @@
 #!/usr/bin/env lua
 
-maxChars = 99
-auctionCode = "OVH.PA"
-auctionRegion = "FR"
-auctionLang = "fr-FR"
+local config
+
+function _load_config(path)
+    local _env = {}
+    setmetatable(_env, {
+        __index = _G
+    })
+    local f = loadfile(path, "t", _env)
+    if not f then
+        return {}
+    end
+    assert(pcall(f))
+    setmetatable(_env, nil)
+    return _env
+end
+
+function conky_startup()
+    local config_path = os.getenv("PWD") .. "/" .. conky_config
+    print("conky: Loading config from " .. config_path .. "...")
+    config = _load_config(config_path)
+    print("conky: Script has started and is now runing!")
+end
 
 function conky_main()
     if conky_window == nil then
@@ -23,12 +41,19 @@ function conky_cpu()
 end
 
 function conky_power()
+    if io.open("/proc/acpi/battery/BAT0", "r") == nil then
+        return "N/A"
+    end
     local battery_percent = conky_parse('${battery_percent}')
     local acpi_ac_adapter = conky_parse('${acpiacadapter}')
     if acpi_ac_adapter == "on-line" and battery_percent ~= "100%" then
         return battery_percent .. " (Charging)"
+    elseif acpi_ac_adapter == "on-line" and battery_percent == "100%" then
+        return "Charged"
     elseif acpi_ac_adapter ~= "on-line" and battery_percent ~= "0" then
         return battery_percent .. " (Discharging)"
+    elseif acpi_ac_adapter ~= "on-line" and battery_percent == "0" then
+        return "Error"
     end
     return "N/A"
 end
@@ -112,7 +137,7 @@ function _currency2smbol(currency)
 end
 
 function conky_auction()
-    local url = "https://query1.finance.yahoo.com/v8/finance/chart/" .. auctionCode .. "?region=" .. auctionRegion .. "&lang=" .. auctionLang .. "&interval=1m&range=1h"
+    local url = "https://query1.finance.yahoo.com/v8/finance/chart/" .. helper.config.auction.code .. "?region=" .. helper.config.auction.region .. "&lang=" .. helper.config.auction.language .. "&interval=1m&range=1h"
     local fnret = _query_get(url).chart.result
 
     local regularMarketPrice = fnret[1].meta.regularMarketPrice
@@ -122,12 +147,13 @@ function conky_auction()
     local diff = _round(regularMarketPrice - previousClose, 2)
     regularMarketPrice = _round(regularMarketPrice, 2)
 
+    local prefix = conky_parse("$font6${color0}") .. symbol .. conky_parse("${offset 8}$color")
     if diff < 0 then
-        return regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font GE Inspira:pixelsize=12}${color FF0000}") .. diff .. currency .. conky_parse("${voffset 10}")
+        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.auction.negativeColor .. "}") .. diff .. currency .. conky_parse("${voffset 10}$color")
     elseif diff > 0 then
-        return regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font GE Inspira:pixelsize=12}${color 00FF00}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}")
+        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.auction.positiveColor .. "}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}$color")
     else
-        return regularMarketPrice .. currency
+        return prefix .. regularMarketPrice .. currency
     end
 end
 
@@ -269,10 +295,10 @@ end
 
 function _table_format(items, width)
     local str_output = ""
-    width = (width and width or maxChars)
+    width = (width and width or helper.config.maxChars)
     local old_cursor_len = 0
     for _, item in ipairs(items) do
-        local cursor = conky_parse("${offset 8}${color 7764D8}") .. item.key .. conky_parse("$color${offset 8}") .. item.value .. conky_parse("$color${offset 20}")
+        local cursor = conky_parse("${offset 8}$color0") .. item.key .. conky_parse("$color${offset 8}") .. item.value .. conky_parse("$color${offset 20}")
         if old_cursor_len + #cursor > width then
             cursor = cursor .. "\n"
             old_cursor_len = 0
