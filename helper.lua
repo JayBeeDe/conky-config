@@ -41,17 +41,17 @@ function conky_cpu()
 end
 
 function conky_power()
-    if io.open("/proc/acpi/battery/BAT0", "r") == nil then
+    if io.open("/proc/acpi/battery/BAT0", "r") == nil and io.open("/sys/class/power_supply/BAT0", "r") == nil then
         return "N/A"
     end
     local battery_percent = conky_parse('${battery_percent}')
     local acpi_ac_adapter = conky_parse('${acpiacadapter}')
-    if acpi_ac_adapter == "on-line" and battery_percent ~= "100%" then
-        return battery_percent .. " (Charging)"
-    elseif acpi_ac_adapter == "on-line" and battery_percent == "100%" then
+    if acpi_ac_adapter == "on-line" and battery_percent ~= "100" then
+        return battery_percent .. "% (Charging)"
+    elseif acpi_ac_adapter == "on-line" and battery_percent == "100" then
         return "Charged"
     elseif acpi_ac_adapter ~= "on-line" and battery_percent ~= "0" then
-        return battery_percent .. " (Discharging)"
+        return battery_percent .. "% (Discharging)"
     elseif acpi_ac_adapter ~= "on-line" and battery_percent == "0" then
         return "Error"
     end
