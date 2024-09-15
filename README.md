@@ -36,7 +36,7 @@ Make ajustements, when you are satisfied and that console doesn't show any depen
 ```ini
 [Desktop Entry]
 DBusActivatable=false
-Exec=bash -c "cd $HOME/.config/conky/default; conky --config=default.conf --alignment=top_right -x 5 --daemonize 2>&1 >/dev/null"
+Exec=bash -c "cd $HOME/.config/conky/default; conky --config=default.conf --alignment=top_right -x 5 --daemonize"
 Icon=Conky
 Name=Conky
 Name[en_US]=Conky
