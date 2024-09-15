@@ -40,6 +40,50 @@ function conky_cpu()
     end
 end
 
+function _sec_to_human(time)
+    local days = math.floor(time / 86400)
+    local hours = math.floor(math.fmod(time, 86400) / 3600)
+    local minutes = math.floor(math.fmod(time, 3600) / 60)
+    local seconds = math.floor(math.fmod(time, 60))
+    local str = ""
+    if days > 0 then
+        str = str .. days .. "d "
+    end
+    if hours > 0 then
+        str = str .. hours .. "h "
+    end
+    if minutes > 0 and days == 0 then
+        str = str .. minutes .. "m "
+    end
+    if seconds > 0 and minutes == 0 then
+        str = str .. seconds .. "s "
+    end
+    return string.gsub(str, " $", "")
+end
+
+function conky_uptime()
+    local json = require("json")
+    local current_timestamp = os.time(os.date("*t"))
+
+    local fnret = _command("cat /proc/uptime", 0)
+    local uptime_sec, _ = string.gsub(fnret, "%..*", "")
+    uptime_sec = tonumber(uptime_sec)
+
+    fnret = _command("journalctl -u sleep.target MESSAGE=\"Stopped target Sleep.\" -o json -n 1 --no-pager", 0)
+    local awake_timestamp = json.decode(fnret)["_SOURCE_REALTIME_TIMESTAMP"]
+    if awake_timestamp == nil then
+        return _sec_to_human(uptime_sec)
+    else
+        awake_timestamp = math.ceil((tonumber(awake_timestamp) / 1000000) - 0.5)
+    end
+    local awake_sec = current_timestamp - awake_timestamp
+
+    if awake_sec < uptime_sec then
+        return _sec_to_human(awake_sec)
+    end
+    return _sec_to_human(uptime_sec)
+end
+
 function conky_power()
     if io.open("/proc/acpi/battery/BAT0", "r") == nil and io.open("/sys/class/power_supply/BAT0", "r") == nil then
         return "N/A"
@@ -116,7 +160,7 @@ end
 
 function conky_version_gs()
     local fnret = _command("gnome-shell --version", 0)
-    local version, occurencies = string.gsub(fnret, "GNOME Shell ", "")
+    local version, _ = string.gsub(fnret, "GNOME Shell ", "")
     return version
 end
 
