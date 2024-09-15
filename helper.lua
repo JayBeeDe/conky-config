@@ -337,15 +337,19 @@ function _local_routes(version)
     return routes
 end
 
-function _table_format(items, width)
-    local str_output = ""
-    width = (width and width or helper.config.maxChars)
+function _table_format(items, offset)
+    offset = (offset and offset or 0)
+    local width = helper.config.maxChars
+    local margin_h = helper.config.marginH
+    local str_output = conky_parse("${offset " .. margin_h .. "}")
     local old_cursor_len = 0
     for _, item in ipairs(items) do
         local cursor = conky_parse("${offset 8}$color0") .. item.key .. conky_parse("$color${offset 8}") .. item.value .. conky_parse("$color${offset 20}")
-        if old_cursor_len + #cursor > width then
-            cursor = cursor .. "\n"
+        if old_cursor_len + #cursor + margin_h > width then
+            cursor = cursor .. "\n" .. conky_parse("${offset " .. margin_h .. "}")
             old_cursor_len = 0
+        else
+            cursor = cursor .. conky_parse("${offset " .. offset .. "}")
         end
         old_cursor_len = old_cursor_len + #cursor
         str_output = str_output .. cursor
@@ -353,12 +357,12 @@ function _table_format(items, width)
     return str_output
 end
 
-function conky_local_ip()
-    return _table_format(_local_ip())
+function conky_local_ip(offset)
+    return _table_format(_local_ip(), offset)
 end
 
-function conky_local_routes()
-    return _table_format(_local_routes())
+function conky_local_routes(offset)
+    return _table_format(_local_routes(), offset)
 end
 
 _debug_dump(conky_auction())
