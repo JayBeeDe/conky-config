@@ -70,7 +70,10 @@ function conky_uptime()
     uptime_sec = tonumber(uptime_sec)
 
     fnret = _command("journalctl -u sleep.target MESSAGE=\"Stopped target Sleep.\" -o json -n 1 --no-pager", 0)
-    local awake_timestamp = json.decode(fnret)["_SOURCE_REALTIME_TIMESTAMP"]
+    if type(fnret) == "string" then
+        fnret = json.decode(fnret)
+    end
+    local awake_timestamp = fnret["_SOURCE_REALTIME_TIMESTAMP"]
     if awake_timestamp == nil then
         return _sec_to_human(uptime_sec)
     else
@@ -125,7 +128,10 @@ function _query(url, method)
         },
         sink = collect
     }
-    return json.decode(fnret)
+    if type(fnret) == "string" then
+        return json.decode(fnret)
+    end
+    return fnret
 end
 
 function _query_get(url)
@@ -228,7 +234,11 @@ function _local_ip(version)
     end
 
     local json = require("json")
-    local net_interfaces = json.decode(_command("ip -j address", 0))
+    local fnret = _command("ip -j address", 0)
+    local net_interfaces = fnret
+    if type(fnret) == "string" then
+        net_interfaces = json.decode(fnret)
+    end
     for k, net_interface in ipairs(net_interfaces) do
         if net_interface.operstate == "UNKNOWN" or net_interface.operstate == "UP" then
             local if_name = net_interface.ifname
@@ -315,8 +325,16 @@ function _local_routes(version)
     local routes = {}
 
     local json = require("json")
-    local net_routesv4 = _add_attribute_value(json.decode(_command("ip -j route", 0)), "version", 4)
-    local net_routesv6 = _add_attribute_value(json.decode(_command("ip -j -6 route", 0)), "version", 6)
+    local fnretRoutesv4 = _command("ip -j route", 0)
+    if type(fnretRoutesv4) == "string" then
+        fnretRoutesv4 = json.decode(fnretRoutesv4)
+    end
+    local net_routesv4 = _add_attribute_value(fnretRoutesv4, "version", 4)
+    local fnretRoutesv6 = _command("ip -j -6 route", 0)
+    if type(fnretRoutesv6) == "string" then
+        fnretRoutesv6 = json.decode(fnretRoutesv6)
+    end
+    local net_routesv6 = _add_attribute_value(fnretRoutesv6, "version", 6)
     local net_routes = _merge(net_routesv4, net_routesv6)
     table.sort(net_routes, _sort_routes)
     for k, net_route in ipairs(net_routes) do
