@@ -9,7 +9,7 @@ Lua helper for conky script
 Clone this repo to `~/.config/conky/JayBeeDe`
 
 ```bash
-sudo apt-get install lua-json lua-socket
+sudo apt-get install lua-json lua-socket lua-sec
 git clone git@github.com:JayBeeDe/conky-scripts.git ~/.config/conky/JayBeeDe
 ln -s ~/.config/conky/JayBeeDe ~/.config/conky/default
 ```
