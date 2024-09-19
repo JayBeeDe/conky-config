@@ -29,17 +29,6 @@ function conky_main()
     end
 end
 
-function conky_cpu()
-    local cpu = tonumber(conky_parse('${cpu cpu0}'))
-    if cpu < 10 then
-        return "   " .. cpu .. " %"
-    elseif cpu == 100 then
-        return cpu .. " %"
-    else
-        return " " .. cpu .. " %"
-    end
-end
-
 function _sec_to_human(time)
     local days = math.floor(time / 86400)
     local hours = math.floor(math.fmod(time, 86400) / 3600)
@@ -355,32 +344,41 @@ function _local_routes(version)
     return routes
 end
 
-function _table_format(items, offset)
-    offset = (offset and offset or 0)
-    local width = helper.config.maxChars
-    local margin_h = helper.config.marginH
-    local str_output = conky_parse("${offset " .. margin_h .. "}")
+function _table_format(items)
+    local max_chars = helper.config.maximum_chars
+    local columns = (helper.config.columns and helper.config.columns or 2)
+    local margin_horizontal = helper.config.margin_horizontal
+    local maximum_width = conky.config.maximum_width
+
+    local min_item_width = math.floor((maximum_width - (2 * margin_horizontal)) / columns)
+    local cursor_h_position = margin_horizontal
+
+    local string_len_offset = 4 -- no idea why string len is always 4 chars shorter...
+
+    local str_output = conky_parse("${goto " .. cursor_h_position .. "}")
     local old_cursor_len = 0
     for _, item in ipairs(items) do
-        local cursor = conky_parse("${offset 8}$color0") .. item.key .. conky_parse("$color${offset 8}") .. item.value .. conky_parse("$color${offset 20}")
-        if old_cursor_len + #cursor + margin_h > width then
-            cursor = cursor .. "\n" .. conky_parse("${offset " .. margin_h .. "}")
+        local cursor = conky_parse("$color0") .. item.key .. conky_parse("$color${offset 15}") .. item.value .. conky_parse("$color")
+        if old_cursor_len + #cursor - string_len_offset + margin_horizontal > max_chars then
             old_cursor_len = 0
+            cursor_h_position = margin_horizontal
+            cursor = cursor .. "\n"
         else
-            cursor = cursor .. conky_parse("${offset " .. offset .. "}")
+            cursor_h_position = cursor_h_position + (min_item_width * math.ceil((#cursor - string_len_offset) / max_chars * maximum_width / min_item_width))
         end
+        cursor = cursor .. conky_parse("${goto " .. cursor_h_position .. "}")
         old_cursor_len = old_cursor_len + #cursor
         str_output = str_output .. cursor
     end
     return str_output
 end
 
-function conky_local_ip(offset)
-    return _table_format(_local_ip(), offset)
+function conky_local_ip()
+    return _table_format(_local_ip())
 end
 
-function conky_local_routes(offset)
-    return _table_format(_local_routes(), offset)
+function conky_local_routes()
+    return _table_format(_local_routes())
 end
 
 _debug_dump(conky_auction())
