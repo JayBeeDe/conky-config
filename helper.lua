@@ -348,6 +348,7 @@ function _table_format(items)
     local max_chars = helper.config.maximum_chars
     local columns = (helper.config.columns and helper.config.columns or 2)
     local margin_horizontal = helper.config.margin_horizontal
+    local margin_vertical = helper.config.margin_vertical
     local maximum_width = conky.config.maximum_width
 
     local min_item_width = math.floor((maximum_width - (2 * margin_horizontal)) / columns)
@@ -355,14 +356,14 @@ function _table_format(items)
 
     local string_len_offset = 4 -- no idea why string len is always 4 chars shorter...
 
-    local str_output = conky_parse("${goto " .. cursor_h_position .. "}")
+    local str_output = conky_parse("${voffset 0}$font8${goto " .. cursor_h_position .. "}")
     local old_cursor_len = 0
     for _, item in ipairs(items) do
         local cursor = conky_parse("$color0") .. item.key .. conky_parse("$color${offset 15}") .. item.value .. conky_parse("$color")
         if old_cursor_len + #cursor - string_len_offset + margin_horizontal > max_chars then
             old_cursor_len = 0
             cursor_h_position = margin_horizontal
-            cursor = cursor .. "\n"
+            cursor = cursor .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
         else
             cursor_h_position = cursor_h_position + (min_item_width * math.ceil((#cursor - string_len_offset) / max_chars * maximum_width / min_item_width))
         end
@@ -370,7 +371,7 @@ function _table_format(items)
         old_cursor_len = old_cursor_len + #cursor
         str_output = str_output .. cursor
     end
-    return str_output
+    return str_output .. conky_parse("${voffset -" .. margin_vertical .. "}")
 end
 
 function conky_local_ip()
