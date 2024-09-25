@@ -384,26 +384,20 @@ function _table_format(items)
     local maximum_width = conky.config.maximum_width
 
     local min_item_width = math.floor((maximum_width - (2 * margin_horizontal)) / columns)
-    local cursor_h_position = margin_horizontal
 
-    local string_len_offset = 4 -- no idea why string len is always 4 chars shorter...
+    local str_output = conky_parse("${voffset -" .. margin_vertical .. "}")
+    local cursor_position = maximum_width -- to ensure to initialize properly
 
-    local str_output = conky_parse("${voffset 0}$font8${goto " .. cursor_h_position .. "}")
-    local old_cursor_len = 0
     for _, item in ipairs(items) do
-        local cursor = conky_parse("$color0") .. item.key .. conky_parse("$color${offset 15}") .. item.value .. conky_parse("$color")
-        if old_cursor_len + #cursor - string_len_offset + margin_horizontal > max_chars then
-            old_cursor_len = 0
-            cursor_h_position = margin_horizontal
-            cursor = cursor .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
-        else
-            cursor_h_position = cursor_h_position + (min_item_width * math.ceil((#cursor - string_len_offset) / max_chars * maximum_width / min_item_width))
+        local item_width = math.ceil((string.len(item.key) + string.len(item.value)) / max_chars * maximum_width) + 15 -- converts characters size to pixel size
+        if cursor_position + item_width + margin_horizontal > maximum_width then -- new line
+            cursor_position = margin_horizontal
+            str_output = str_output .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
         end
-        cursor = cursor .. conky_parse("${goto " .. cursor_h_position .. "}")
-        old_cursor_len = old_cursor_len + #cursor
-        str_output = str_output .. cursor
+        str_output = str_output .. conky_parse("${goto " .. cursor_position .. "}") .. conky_parse("$color0") .. item.key .. conky_parse("$color${offset 15}") .. item.value
+        cursor_position = cursor_position + (min_item_width * math.ceil(item_width / min_item_width))
     end
-    return str_output .. conky_parse("${voffset -" .. margin_vertical .. "}")
+    return str_output
 end
 
 function conky_local_ip()
