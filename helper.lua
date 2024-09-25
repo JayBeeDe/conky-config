@@ -222,6 +222,8 @@ function _local_ip(version)
         end
     end
 
+    local nic_aliases = _nic_aliases()
+
     local json = require("json")
     local fnret = _command("ip -j address", 0)
     local net_interfaces = fnret
@@ -238,6 +240,9 @@ function _local_ip(version)
                     ip.key = if_name
                     if addr_info.label ~= nil then
                         ip.key = addr_info.label
+                    end
+                    if nic_aliases[ip.key] then
+                        ip.key = nic_aliases[ip.key]
                     end
                     if version == nil and addr_info.family == "inet6" then
                         ip.version = 6
@@ -261,7 +266,7 @@ function _debug_dump(o)
             if type(k) ~= "number" then
                 k = "\"" .. k .. "\""
             end
-            s = s .. "[" .. k .. "] = " .. _dump(v) .. ","
+            s = s .. "[" .. k .. "] = " .. _debug_dump(v) .. ","
         end
         return s .. "} "
     else
@@ -310,8 +315,32 @@ function _sort_routes(a, b)
     return ametric < bmetric
 end
 
+function _nic_aliases()
+    local json = require("json")
+    local fnretNICs = _command("ip -j link", 0)
+    if type(fnretNICs) == "string" then
+        fnretNICs = json.decode(fnretNICs)
+    end
+    local nic_aliases = {}
+    for _, nic in ipairs(fnretNICs) do
+        local if_name = nil
+        if string.match(nic.ifname, "^enx.*$") then
+            if_name = "eth" .. nic.ifindex
+        end
+        if string.match(nic.ifname, "^wlx.*$") then
+            if_name = "wlan" .. nic.ifindex
+        end
+        if if_name then
+            nic_aliases[nic.ifname] = if_name
+        end
+    end
+    return nic_aliases
+end
+
 function _local_routes(version)
     local routes = {}
+
+    local nic_aliases = _nic_aliases()
 
     local json = require("json")
     local fnretRoutesv4 = _command("ip -j route", 0)
@@ -330,6 +359,9 @@ function _local_routes(version)
         if not _table_has_value(net_route.flags, "linkdown") and net_route.dev ~= "lo" and (not version or net_route.version == version) then
             local route = {}
             route.key = net_route.dev
+            if nic_aliases[route.key] then
+                route.key = nic_aliases[route.key]
+            end
             route.value = net_route.dst
             if route.value == "default" then
                 route.value = (net_route.version == 4 and "0.0.0.0/0" or "::/0")
@@ -381,5 +413,3 @@ end
 function conky_local_routes()
     return _table_format(_local_routes())
 end
-
-_debug_dump(conky_auction())
