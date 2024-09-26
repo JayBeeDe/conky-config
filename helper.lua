@@ -1,5 +1,6 @@
 #!/usr/bin/env lua
 
+-- config management functions
 local config
 
 function _load_config(path)
@@ -50,49 +51,7 @@ function _sec_to_human(time)
     return string.gsub(str, " $", "")
 end
 
-function conky_uptime()
-    local json = require("json")
-    local current_timestamp = os.time(os.date("*t"))
-
-    local fnret = _command("cat /proc/uptime", 0)
-    local uptime_sec, _ = string.gsub(fnret, "%..*", "")
-    uptime_sec = tonumber(uptime_sec)
-
-    fnret = _command("journalctl -u sleep.target MESSAGE=\"Stopped target Sleep.\" -o json -n 1 --no-pager", 0)
-    if type(fnret) == "string" then
-        fnret = json.decode(fnret)
-    end
-    local awake_timestamp = fnret["_SOURCE_REALTIME_TIMESTAMP"]
-    if awake_timestamp == nil then
-        return _sec_to_human(uptime_sec)
-    else
-        awake_timestamp = math.ceil((tonumber(awake_timestamp) / 1000000) - 0.5)
-    end
-    local awake_sec = current_timestamp - awake_timestamp
-
-    if awake_sec < uptime_sec then
-        return _sec_to_human(awake_sec)
-    end
-    return _sec_to_human(uptime_sec)
-end
-
-function conky_power()
-    if io.open("/proc/acpi/battery/BAT0", "r") == nil and io.open("/sys/class/power_supply/BAT0", "r") == nil then
-        return "N/A"
-    end
-    local battery_percent = conky_parse('${battery_percent}')
-    local acpi_ac_adapter = conky_parse('${acpiacadapter}')
-    if acpi_ac_adapter == "on-line" and battery_percent ~= "100" then
-        return battery_percent .. "% (Charging)"
-    elseif acpi_ac_adapter == "on-line" and battery_percent == "100" then
-        return "Charged"
-    elseif acpi_ac_adapter ~= "on-line" and battery_percent ~= "0" then
-        return battery_percent .. "% (Discharging)"
-    elseif acpi_ac_adapter ~= "on-line" and battery_percent == "0" then
-        return "Error"
-    end
-    return "N/A"
-end
+-- utils functions
 
 function _query(url, method)
     -- http = require("socket.http")
@@ -141,29 +100,6 @@ function _command(cmd, idx)
     return fnret
 end
 
-function conky_arch()
-    return _command("arch", 0)
-end
-
-function conky_arch()
-    return _command("arch", 0)
-end
-
-function conky_version_os()
-    return _command("lsb_release -ds", 0)
-end
-
-function conky_version_gs()
-    local fnret = _command("gnome-shell --version", 0)
-    local version, _ = string.gsub(fnret, "GNOME Shell ", "")
-    return version
-end
-
-function _round(num, decimalPlaces)
-    local mult = 10 ^ (decimalPlaces or 0)
-    return math.floor(num * mult + 0.5) / mult
-end
-
 function _currency2smbol(currency)
     local currency2smbol = {
         EUR = "€", --
@@ -173,6 +109,125 @@ function _currency2smbol(currency)
         return ""
     end
     return currency2smbol[currency]
+end
+
+function _round(num, decimalPlaces)
+    local mult = 10 ^ (decimalPlaces or 0)
+    return math.floor(num * mult + 0.5) / mult
+end
+
+function _merge(...)
+    local result = {}
+    local k = 1
+    for _, t in ipairs {...} do
+        for _, v in ipairs(t) do
+            result[k] = v
+            k = k + 1
+        end
+    end
+    return result
+end
+
+function _table_has_value(tab, val)
+    for _, value in ipairs(tab) do
+        if value == val then
+            return true
+        end
+    end
+
+    return false
+end
+
+function _add_attribute_value(table, attribute, value)
+    for _, item in ipairs(table) do
+        item[attribute] = (item.attribute and item.attribute or value)
+    end
+    return table
+end
+
+-- conky display functions
+
+function _table_format(items)
+    local max_chars = helper.config.maximum_chars
+    local columns = (helper.config.columns and helper.config.columns or 2)
+    local margin_horizontal = helper.config.margin_horizontal
+    local margin_vertical = helper.config.margin_vertical
+    local maximum_width = conky.config.maximum_width
+    local tabulation_width = helper.config.tabulation_width
+
+    local min_item_width = math.floor((maximum_width - (2 * margin_horizontal)) / columns)
+
+    local str_output = conky_parse("${voffset -" .. margin_vertical .. "}")
+    local cursor_position = maximum_width -- to ensure to initialize properly
+
+    for _, item in ipairs(items) do
+        local item_width = math.ceil((string.len(item.key) + string.len(item.value)) / max_chars * maximum_width) + tabulation_width -- converts characters size to pixel size
+        if cursor_position + item_width + margin_horizontal > maximum_width then -- new line
+            cursor_position = margin_horizontal
+            str_output = str_output .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
+        end
+        str_output = str_output .. conky_parse("${goto " .. cursor_position .. "}") .. conky_parse("$color0") .. item.key .. conky_parse("$color${offset " .. tabulation_width .. "}") .. item.value
+        cursor_position = cursor_position + (min_item_width * math.ceil(item_width / min_item_width))
+    end
+    return str_output
+end
+
+function conky_display(...)
+    local fnrets = {}
+    for _, function_name in pairs({...}) do
+        local fnret = _G["conky_" .. function_name]()
+        if #fnret and #fnret > 0 then
+            for i = 1, #fnret do
+                fnrets[#fnrets + 1] = fnret[i]
+            end
+        else
+            fnrets[#fnrets + 1] = fnret
+        end
+    end
+    return _table_format(fnrets)
+end
+
+function _debug_dump(o)
+    if type(o) == "table" then
+        local s = "{ "
+        for k, v in pairs(o) do
+            if type(k) ~= "number" then
+                k = "\"" .. k .. "\""
+            end
+            s = s .. "[" .. k .. "] = " .. _debug_dump(v) .. ","
+        end
+        return s .. "} "
+    else
+        return tostring(o)
+    end
+end
+
+-- conky system informations functions
+
+function conky_uptime()
+    local json = require("json")
+    local current_timestamp = os.time(os.date("*t"))
+
+    local fnret = _command("cat /proc/uptime", 0)
+    local uptime_sec, _ = string.gsub(fnret, "%..*", "")
+    uptime_sec = tonumber(uptime_sec)
+
+    fnret = _command("journalctl -u sleep.target MESSAGE=\"Stopped target Sleep.\" -o json -n 1 --no-pager", 0)
+    if type(fnret) == "string" then
+        fnret = json.decode(fnret)
+    end
+    local awake_timestamp = fnret["_SOURCE_REALTIME_TIMESTAMP"]
+    if awake_timestamp == nil then
+        return _sec_to_human(uptime_sec)
+    else
+        awake_timestamp = math.ceil((tonumber(awake_timestamp) / 1000000) - 0.5)
+    end
+    local awake_sec = current_timestamp - awake_timestamp
+
+    if awake_sec < uptime_sec then
+        return _sec_to_human(awake_sec)
+    end
+    return _sec_to_human(uptime_sec)
 end
 
 function conky_auction()
@@ -196,7 +251,95 @@ function conky_auction()
     end
 end
 
-function _local_ip(version)
+function conky_storage()
+    return {
+        key = "HD",
+        value = conky_parse('${fs_free}') .. " / " .. conky_parse('${fs_size}')
+    }
+end
+
+function conky_memory()
+    return {
+        key = "RAM",
+        value = conky_parse('${mem}') .. " / " .. conky_parse('${memmax}')
+    }
+end
+
+function conky_cpu()
+    return {
+        key = "CPU",
+        value = conky_parse('${cpu}') .. " %"
+    }
+end
+
+function conky_power()
+    local label = "Battery"
+    if io.open("/proc/acpi/battery/BAT0", "r") == nil and io.open("/sys/class/power_supply/BAT0", "r") == nil then
+        return {
+            key = label,
+            value = "N/A"
+        }
+    end
+    local battery_percent = conky_parse('${battery_percent}')
+    local acpi_ac_adapter = conky_parse('${acpiacadapter}')
+    if acpi_ac_adapter == "on-line" and battery_percent ~= "100" then
+        return {
+            key = label,
+            value = battery_percent .. "% (Charging)"
+        }
+    elseif acpi_ac_adapter == "on-line" and battery_percent == "100" then
+        return {
+            key = label,
+            value = "Charged"
+        }
+    elseif acpi_ac_adapter ~= "on-line" and battery_percent ~= "0" then
+        return {
+            key = label,
+            value = battery_percent .. "% (Discharging)"
+        }
+    elseif acpi_ac_adapter ~= "on-line" and battery_percent == "0" then
+        return {
+            key = label,
+            value = "Error"
+        }
+    end
+    return {
+        key = label,
+        value = "N/A"
+    }
+end
+
+function conky_arch()
+    return {
+        key = "Arch",
+        value = _command("arch", 0)
+    }
+end
+
+function conky_version_os()
+    return {
+        key = "OS",
+        value = _command("lsb_release -ds", 0)
+    }
+end
+
+function conky_version_kernel()
+    return {
+        key = "Kern",
+        value = conky_parse("$kernel")
+    }
+end
+
+function conky_version_gs()
+    local fnret = _command("gnome-shell --version", 0)
+    local version, _ = string.gsub(fnret, "GNOME Shell ", "")
+    return {
+        key = "Gnome",
+        value = version
+    }
+end
+
+function conky_local_ip(version)
     local family = (version and "inet" .. (version == 6 and version or "") or "inet")
     local ips = {}
 
@@ -259,50 +402,6 @@ function _local_ip(version)
     return ips
 end
 
-function _debug_dump(o)
-    if type(o) == "table" then
-        local s = "{ "
-        for k, v in pairs(o) do
-            if type(k) ~= "number" then
-                k = "\"" .. k .. "\""
-            end
-            s = s .. "[" .. k .. "] = " .. _debug_dump(v) .. ","
-        end
-        return s .. "} "
-    else
-        return tostring(o)
-    end
-end
-
-function _table_has_value(tab, val)
-    for _, value in ipairs(tab) do
-        if value == val then
-            return true
-        end
-    end
-
-    return false
-end
-
-function _merge(...)
-    local result = {}
-    local k = 1
-    for _, t in ipairs {...} do
-        for _, v in ipairs(t) do
-            result[k] = v
-            k = k + 1
-        end
-    end
-    return result
-end
-
-function _add_attribute_value(table, attribute, value)
-    for _, item in ipairs(table) do
-        item[attribute] = (item.attribute and item.attribute or value)
-    end
-    return table
-end
-
 function _sort_routes(a, b)
     local ametric = (a.metric and a.metric or 0)
     ametric = (ametric == "default" and ametric - 1 or ametric)
@@ -337,7 +436,7 @@ function _nic_aliases()
     return nic_aliases
 end
 
-function _local_routes(version)
+function conky_local_routes(version)
     local routes = {}
 
     local nic_aliases = _nic_aliases()
@@ -374,36 +473,4 @@ function _local_routes(version)
         end
     end
     return routes
-end
-
-function _table_format(items)
-    local max_chars = helper.config.maximum_chars
-    local columns = (helper.config.columns and helper.config.columns or 2)
-    local margin_horizontal = helper.config.margin_horizontal
-    local margin_vertical = helper.config.margin_vertical
-    local maximum_width = conky.config.maximum_width
-
-    local min_item_width = math.floor((maximum_width - (2 * margin_horizontal)) / columns)
-
-    local str_output = conky_parse("${voffset -" .. margin_vertical .. "}")
-    local cursor_position = maximum_width -- to ensure to initialize properly
-
-    for _, item in ipairs(items) do
-        local item_width = math.ceil((string.len(item.key) + string.len(item.value)) / max_chars * maximum_width) + 15 -- converts characters size to pixel size
-        if cursor_position + item_width + margin_horizontal > maximum_width then -- new line
-            cursor_position = margin_horizontal
-            str_output = str_output .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
-        end
-        str_output = str_output .. conky_parse("${goto " .. cursor_position .. "}") .. conky_parse("$color0") .. item.key .. conky_parse("$color${offset 15}") .. item.value
-        cursor_position = cursor_position + (min_item_width * math.ceil(item_width / min_item_width))
-    end
-    return str_output
-end
-
-function conky_local_ip()
-    return _table_format(_local_ip())
-end
-
-function conky_local_routes()
-    return _table_format(_local_routes())
 end
