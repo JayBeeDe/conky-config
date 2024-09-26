@@ -2,6 +2,7 @@
 
 -- config management functions
 local config
+local cache
 
 function _load_config(path)
     local _env = {}
@@ -21,6 +22,7 @@ function conky_startup()
     local config_path = os.getenv("PWD") .. "/" .. conky_config
     print("conky: Loading config from " .. config_path .. "...")
     config = _load_config(config_path)
+    cache = {}
     print("conky: Script has started and is now runing!")
 end
 
@@ -280,34 +282,46 @@ function conky_temperature()
 end
 
 function conky_boot()
-    local fnret = _command("test -d /sys/firmware/efi 2>&1 > /dev/null; echo $?", 0)
-    local boot_type = "legacy"
-    if fnret == "0" then
-        boot_type = "uefi"
+    if not cache.boot then
+        print("conky_boot: Loading cache...")
+        local fnret = _command("test -d /sys/firmware/efi 2>&1 > /dev/null; echo $?", 0)
+        local boot_type = "legacy"
+        if fnret == "0" then
+            boot_type = "uefi"
+        end
+        local tpm_type = "no TPM"
+        fnret = _command("test -c /dev/" .. helper.config.boot.tpm_device .. " 2>&1 > /dev/null; echo $?", 0)
+        if fnret == "0" then
+            tpm_type = "TPM"
+        end
+        cache.boot = {
+            key = "Boot",
+            value = boot_type .. " (" .. tpm_type .. ")"
+        }
     end
-    local tpm_type = "no TPM"
-    fnret = _command("test -c /dev/" .. helper.config.boot.tpm_device .. " 2>&1 > /dev/null; echo $?", 0)
-    if fnret == "0" then
-        tpm_type = "TPM"
-    end
-    return {
-        key = "Boot",
-        value = boot_type .. " (" .. tpm_type .. ")"
-    }
+    return cache.boot
 end
 
 function conky_version_os()
-    return {
-        key = "OS",
-        value = _command("lsb_release -ds", 0)
-    }
+    if not cache.version_os then
+        print("conky_version_os: Loading cache...")
+        cache.version_os = {
+            key = "OS",
+            value = _command("lsb_release -ds", 0)
+        }
+    end
+    return cache.version_os
 end
 
 function conky_version_kernel()
-    return {
-        key = "Kern",
-        value = string.gsub(conky_parse("$kernel"), "-generic$", "")
-    }
+    if not cache.version_kernel then
+        print("conky_version_kernel: Loading cache...")
+        cache.version_kernel = {
+            key = "Kern",
+            value = string.gsub(conky_parse("$kernel"), "-generic$", "")
+        }
+    end
+    return cache.version_kernel
 end
 
 function conky_power()
@@ -345,23 +359,32 @@ function conky_power()
 end
 
 function conky_arch()
-    return {
-        key = "Arch",
-        value = _command("arch", 0)
-    }
+    if not cache.arch then
+        print("conky_arch: Loading cache...")
+        cache.arch = {
+            key = "Arch",
+            value = _command("arch", 0)
+        }
+    end
+    return cache.arch
 end
 
 function conky_version_gs()
-    local fnret = _command("gnome-shell --version", 0)
-    local version, _ = string.gsub(fnret, "GNOME Shell ", "")
-    local session_type = "Xorg (X11)"
-    if (os.getenv("XDG_SESSION_TYPE") == "wayland") then
-        session_type = "wayland"
+    if not cache.version_gs then
+        print("conky_version_gs: Loading cache...")
+        local fnret = _command("gnome-shell --version", 0)
+        local version, _ = string.gsub(fnret, "GNOME Shell ", "")
+        local session_type = "Xorg (X11)"
+        if (os.getenv("XDG_SESSION_TYPE") == "wayland") then
+            session_type = "wayland"
+        end
+
+        cache.version_gs = {
+            key = "Gnome",
+            value = version .. "  (" .. session_type .. ")"
+        }
     end
-    return {
-        key = "Gnome",
-        value = version .. "  (" .. session_type .. ")"
-    }
+    return cache.version_gs
 end
 
 function conky_local_ip(version)
