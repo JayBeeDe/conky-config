@@ -268,7 +268,14 @@ end
 function conky_cpu()
     return {
         key = "CPU",
-        value = conky_parse('${cpu}') .. " %"
+        value = conky_parse('${cpu}') .. " %  @" .. conky_parse("${freq_g}") .. " GHz"
+    }
+end
+
+function conky_temperature()
+    return {
+        key = "Temp",
+        value = conky_parse('${hwmon 1 temp 1}') .. "°C"
     }
 end
 
@@ -333,9 +340,13 @@ end
 function conky_version_gs()
     local fnret = _command("gnome-shell --version", 0)
     local version, _ = string.gsub(fnret, "GNOME Shell ", "")
+    local session_type = "Xorg (X11)"
+    if (os.getenv("XDG_SESSION_TYPE") == "wayland") then
+        session_type = "Wayland"
+    end
     return {
         key = "Gnome",
-        value = version
+        value = version .. " (" .. session_type .. ")"
     }
 end
 
