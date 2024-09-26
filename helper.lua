@@ -243,9 +243,9 @@ function conky_auction()
 
     local prefix = conky_parse("$font6${color0}") .. symbol .. conky_parse("${offset 8}$color")
     if diff < 0 then
-        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.auction.negativeColor .. "}") .. diff .. currency .. conky_parse("${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.colors.negative .. "}") .. diff .. currency .. conky_parse("${voffset 10}$color")
     elseif diff > 0 then
-        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.auction.positiveColor .. "}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.colors.positive .. "}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}$color")
     else
         return prefix .. regularMarketPrice .. currency
     end
@@ -254,41 +254,41 @@ end
 function conky_storage()
     return {
         key = "HD",
-        value = conky_parse('${fs_free}') .. " / " .. conky_parse('${fs_size}')
+        value = conky_parse("${fs_free}") .. " / " .. conky_parse("${fs_size}")
     }
 end
 
 function conky_memory()
     return {
         key = "RAM",
-        value = conky_parse('${mem}') .. " / " .. conky_parse('${memmax}')
+        value = conky_parse("${mem}") .. " / " .. conky_parse("${memmax}")
     }
 end
 
 function conky_cpu()
     return {
         key = "CPU",
-        value = conky_parse('${cpu}') .. " %  @" .. conky_parse("${freq_g}") .. " GHz"
+        value = conky_parse("${cpu}") .. " %  @" .. conky_parse("${freq_g}") .. " GHz"
     }
 end
 
 function conky_temperature()
     return {
         key = "Temp",
-        value = conky_parse('${hwmon 1 temp 1}') .. "°C"
+        value = conky_parse("${hwmon " .. helper.config.temperature.sensor_device .. " temp " .. helper.config.temperature.sensor_type .. "}") .. "°C"
     }
 end
 
 function conky_power()
     local label = "Battery"
-    if io.open("/proc/acpi/battery/BAT0", "r") == nil and io.open("/sys/class/power_supply/BAT0", "r") == nil then
+    if io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") == nil and io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") == nil then
         return {
             key = label,
             value = "N/A"
         }
     end
-    local battery_percent = conky_parse('${battery_percent}')
-    local acpi_ac_adapter = conky_parse('${acpiacadapter}')
+    local battery_percent = conky_parse("${battery_percent}")
+    local acpi_ac_adapter = conky_parse("${acpiacadapter}")
     if acpi_ac_adapter == "on-line" and battery_percent ~= "100" then
         return {
             key = label,
