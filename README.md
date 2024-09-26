@@ -9,7 +9,7 @@ Lua helper for conky script
 Clone this repo to `~/.config/conky/JayBeeDe`
 
 ```bash
-sudo apt-get install lua-json lua-socket lua-sec
+sudo apt-get install fonts-font-awesome lua-json lua-socket lua-sec mokutil
 git clone git@github.com:JayBeeDe/conky-scripts.git ~/.config/conky/JayBeeDe
 ln -s ~/.config/conky/JayBeeDe ~/.config/conky/default
 ```
@@ -17,10 +17,10 @@ ln -s ~/.config/conky/JayBeeDe ~/.config/conky/default
 Install required font dependency from third-part website:
 
 ```bash
-mkdir -p "$HOME/.local/share/fonts/"
+mkdir -p "${HOME}/.local/share/fonts/"
 curl -sSL "https://font.download/dl/font/ge-inspira.zip" -o "/tmp/ge-inspira.zip"
-unzip "/tmp/ge-inspira.zip" -d "$HOME/.local/share/fonts"
-chmod +x "$HOME/.local/share/fonts"
+unzip "/tmp/ge-inspira.zip" -d "${HOME}/.local/share/fonts"
+chmod -R +x "${HOME}/.local/share/fonts"
 rm -f "/tmp/ge-inspira.zip"
 ```
 

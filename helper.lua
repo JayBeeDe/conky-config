@@ -161,12 +161,12 @@ function _table_format(items)
     local cursor_position = maximum_width -- to ensure to initialize properly
 
     for _, item in ipairs(items) do
-        local item_width = math.ceil((string.len(item.key) + string.len(item.value)) / max_chars * maximum_width) + tabulation_width -- converts characters size to pixel size
+        local item_width = math.ceil((string.len(conky_parse(item.key)) + string.len(conky_parse(item.value))) / max_chars * maximum_width) + tabulation_width -- converts characters size to pixel size
         if cursor_position + item_width + margin_horizontal > maximum_width then -- new line
             cursor_position = margin_horizontal
             str_output = str_output .. conky_parse("${voffset " .. margin_vertical .. "}$font8")
         end
-        str_output = str_output .. conky_parse("${goto " .. cursor_position .. "}") .. conky_parse("$color0") .. item.key .. conky_parse("$color${offset " .. tabulation_width .. "}") .. item.value
+        str_output = str_output .. conky_parse("${goto " .. cursor_position .. "}") .. conky_parse("$color0") .. conky_parse(item.key) .. conky_parse("$color${offset " .. tabulation_width .. "}") .. conky_parse(item.value)
         cursor_position = cursor_position + (min_item_width * math.ceil(item_width / min_item_width))
     end
     return str_output
@@ -243,9 +243,9 @@ function conky_auction()
 
     local prefix = conky_parse("$font6${color0}") .. symbol .. conky_parse("${offset 8}$color")
     if diff < 0 then
-        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.colors.negative .. "}") .. diff .. currency .. conky_parse("${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color2$font0  $font9") .. diff .. currency .. conky_parse("$font9${voffset 10}$color")
     elseif diff > 0 then
-        return prefix .. regularMarketPrice .. currency .. " " .. conky_parse("$color$font${voffset -10}${font9}${color " .. helper.config.colors.positive .. "}") .. "+" .. diff .. currency .. conky_parse("${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color1$font0  $font9") .. diff .. currency .. conky_parse("$font9${voffset 10}$color")
     else
         return prefix .. regularMarketPrice .. currency
     end
@@ -254,38 +254,66 @@ end
 function conky_storage()
     return {
         key = "HD",
-        value = conky_parse("${fs_free}") .. " / " .. conky_parse("${fs_size}")
+        value = "${fs_free} / ${fs_size}"
     }
 end
 
 function conky_memory()
     return {
         key = "RAM",
-        value = conky_parse("${mem}") .. " / " .. conky_parse("${memmax}")
+        value = "${mem} / ${memmax}"
     }
 end
 
 function conky_cpu()
     return {
         key = "CPU",
-        value = conky_parse("${cpu}") .. " %  @" .. conky_parse("${freq_g}") .. " GHz"
+        value = "${cpu} %  @${freq_g} GHz"
     }
 end
 
 function conky_temperature()
     return {
         key = "Temp",
-        value = conky_parse("${hwmon " .. helper.config.temperature.sensor_device .. " temp " .. helper.config.temperature.sensor_type .. "}") .. "°C"
+        value = "${hwmon " .. helper.config.temperature.sensor_device .. " temp " .. helper.config.temperature.sensor_type .. "} °C"
+    }
+end
+
+function conky_boot()
+    local fnret = _command("test -d /sys/firmware/efi 2>&1 > /dev/null; echo $?", 0)
+    local boot_type = "legacy"
+    if fnret == "0" then
+        boot_type = "uefi"
+    end
+    local tpm_type = "no TPM"
+    fnret = _command("test -c /dev/" .. helper.config.boot.tpm_device .. " 2>&1 > /dev/null; echo $?", 0)
+    if fnret == "0" then
+        tpm_type = "TPM"
+    end
+    return {
+        key = "Boot",
+        value = boot_type .. " (" .. tpm_type .. ")"
+    }
+end
+
+function conky_version_os()
+    return {
+        key = "OS",
+        value = _command("lsb_release -ds", 0)
+    }
+end
+
+function conky_version_kernel()
+    return {
+        key = "Kern",
+        value = string.gsub(conky_parse("$kernel"), "-generic$", "")
     }
 end
 
 function conky_power()
     local label = "Battery"
     if io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") == nil and io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") == nil then
-        return {
-            key = label,
-            value = "N/A"
-        }
+        return conky_arch() -- not a laptop, let's fall back to something else
     end
     local battery_percent = conky_parse("${battery_percent}")
     local acpi_ac_adapter = conky_parse("${acpiacadapter}")
@@ -323,30 +351,16 @@ function conky_arch()
     }
 end
 
-function conky_version_os()
-    return {
-        key = "OS",
-        value = _command("lsb_release -ds", 0)
-    }
-end
-
-function conky_version_kernel()
-    return {
-        key = "Kern",
-        value = conky_parse("$kernel")
-    }
-end
-
 function conky_version_gs()
     local fnret = _command("gnome-shell --version", 0)
     local version, _ = string.gsub(fnret, "GNOME Shell ", "")
     local session_type = "Xorg (X11)"
     if (os.getenv("XDG_SESSION_TYPE") == "wayland") then
-        session_type = "Wayland"
+        session_type = "wayland"
     end
     return {
         key = "Gnome",
-        value = version .. " (" .. session_type .. ")"
+        value = version .. "  (" .. session_type .. ")"
     }
 end
 
