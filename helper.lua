@@ -107,6 +107,42 @@ function _query_get(url)
     return _query(url, "GET")
 end
 
+function _file(path, mode, lines)
+    mode = (mode and mode or "r")
+    if mode ~= "r" and mode ~= "a" and mode ~= "w" then
+        return nil
+    end
+    local file = io.open(path, mode)
+    if not file then
+        return nil
+    end
+    if mode == "r" then
+        if lines ~= nil then
+            return nil
+        end
+        lines = {}
+        for line in file:lines() do
+            lines[#lines + 1] = line
+        end
+    else
+        if lines == nil then
+            return nil
+        end
+        for _, line in ipairs(lines) do
+            file:write(line, "\n")
+        end
+    end
+    file:close()
+    return lines
+end
+
+function _file_read(path, idx)
+    if idx then
+        return _file(path, "r")[idx + 1]
+    end
+    return _file(path, "r")
+end
+
 function _command(cmd, idx)
     local handle = io.popen(cmd .. " 2>/dev/null")
     -- local fnret = handle:read("*all")
@@ -209,9 +245,7 @@ function conky_display(...)
     for _, function_name in pairs({...}) do
         local fnret = _G["conky_" .. function_name]()
         if #fnret and #fnret > 0 then
-            for i = 1, #fnret do
-                fnrets[#fnrets + 1] = fnret[i]
-            end
+            fnrets = _merge(fnrets, fnret)
         else
             fnrets[#fnrets + 1] = fnret
         end
@@ -240,7 +274,7 @@ function conky_uptime()
     local json = require("json")
     local current_timestamp = os.time(os.date("*t"))
 
-    local fnret = _command("cat /proc/uptime", 0)
+    local fnret = _file_read("/proc/uptime", 0)
     local uptime_sec, _ = string.gsub(fnret, "%..*", "")
     uptime_sec = tonumber(uptime_sec)
 
@@ -283,11 +317,74 @@ function conky_auction()
     end
 end
 
-function conky_storage()
-    return {
-        key = "HD",
-        value = "${fs_free} / ${fs_size}"
-    }
+function _shall_display(item, blacklist)
+    for blacklist_attribute, blacklist_value in pairs(blacklist) do
+        if type(item[blacklist_attribute]) == "function" then
+            item[blacklist_attribute] = nil
+        end
+        if blacklist_value == "" then
+            if not item[blacklist_attribute] and blacklist_value == "" then
+                return false
+            end
+        else
+            if string.match(item[blacklist_attribute], blacklist_value) then
+                return false
+            end
+        end
+    end
+    return true
+end
+
+function conky_storage_partitions()
+    local storage = {}
+    local json = require("json")
+    local fnret = _command("lsblk -J -n -p -l -x MOUNTPOINT -O | jq -cM", 0)
+    if type(fnret) == "string" then
+        fnret = json.decode(fnret)
+    end
+    if not fnret.blockdevices then
+        return nil
+    end
+    for _, item in pairs(fnret.blockdevices) do
+        if _shall_display(item, helper.config.storage.black_list) == true then
+            if item.fstype == "swap" then
+                item.mountpoint = "swap"
+                item.fsused = string.gsub(conky_parse("$swap"), " ", "")
+                item.size = string.gsub(conky_parse("$swapmax"), " ", "")
+                item["fsuse%"] = conky_parse("$swapperc") .. "%"
+            end
+            if type(item.fssize) == "function" then
+                item.fssize = item.size
+            end
+            storage[#storage + 1] = {
+                key = item.mountpoint,
+                value = item.fstype .. " " .. item.type .. ", " .. item.fsused .. " / " .. item.fssize .. " (" .. item["fsuse%"] .. ")"
+            }
+        end
+    end
+    return storage
+end
+
+function conky_storage_raid()
+    local storage = {}
+    local json = require("json")
+    local lines = _file_read("/proc/mdstat")
+    for _, line in ipairs(lines) do
+        local columns = _split(line, " ")
+        if columns[1] and string.match(columns[1], "^md[0-9]+$") and columns[2] and columns[2] == ":" and columns[3] and columns[4] then
+            storage[#storage + 1] = {
+                key = columns[1],
+                value = columns[4] .. ", " .. columns[3]
+            }
+        elseif columns[2] and columns[2] == "blocks" and columns[3] and columns[3] == "super" and columns[6] then
+            local status = "error"
+            if columns[6] == "[UU]" then
+                status = "ok"
+            end
+            storage[#storage].value = storage[#storage].value .. ", " .. status
+        end
+    end
+    return storage
 end
 
 function conky_memory()
