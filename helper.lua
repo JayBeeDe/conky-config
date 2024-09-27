@@ -2,7 +2,12 @@
 
 -- config management functions
 local config
-local cache = {}
+local cache = {
+    query = {}
+}
+local run = {
+    ttl = {}
+}
 
 function _load_config(path)
     local _env = {}
@@ -55,9 +60,19 @@ end
 -- utils functions
 
 function _query(url, method)
-    -- http = require("socket.http")
-    http = require("ssl.https")
+    local mime = require("mime")
+    local http = require("ssl.https")
     local json = require("json")
+
+    local query_id = mime.b64(method .. "." .. url)
+    if not run.ttl[query_id] or not cache.query[query_id] then
+        run.ttl[query_id] = 0
+    end
+
+    if run.ttl[query_id] > 0 then
+        run.ttl[query_id] = run.ttl[query_id] - conky.config.update_interval
+        return cache.query[query_id]
+    end
 
     local fnret = ""
     function collect(chunk)
@@ -77,9 +92,14 @@ function _query(url, method)
         },
         sink = collect
     }
+
     if type(fnret) == "string" then
-        return json.decode(fnret)
+        fnret = json.decode(fnret)
     end
+    cache.query[query_id] = fnret
+    print("_query: Loading " .. method .. " " .. url .. " result to cache...")
+    run.ttl[query_id] = helper.config.queries_interval
+
     return fnret
 end
 
@@ -282,7 +302,7 @@ end
 
 function conky_boot()
     if not cache.boot then
-        print("conky_boot: Loading cache...")
+        print("conky_boot: Loading to cache...")
         local fnret = _command("test -d /sys/firmware/efi 2>&1 > /dev/null; echo $?", 0)
         local boot_type = "legacy"
         if fnret == "0" then
@@ -303,7 +323,7 @@ end
 
 function conky_version_os()
     if not cache.version_os then
-        print("conky_version_os: Loading cache...")
+        print("conky_version_os: Loading to cache...")
         cache.version_os = {
             key = "OS",
             value = _command("lsb_release -ds", 0)
@@ -314,7 +334,7 @@ end
 
 function conky_version_kernel()
     if not cache.version_kernel then
-        print("conky_version_kernel: Loading cache...")
+        print("conky_version_kernel: Loading to cache...")
         cache.version_kernel = {
             key = "Kern",
             value = string.gsub(conky_parse("$kernel"), "-generic$", "")
@@ -359,7 +379,7 @@ end
 
 function conky_arch()
     if not cache.arch then
-        print("conky_arch: Loading cache...")
+        print("conky_arch: Loading to cache...")
         cache.arch = {
             key = "Arch",
             value = _command("arch", 0)
@@ -370,7 +390,7 @@ end
 
 function conky_version_gs()
     if not cache.version_gs then
-        print("conky_version_gs: Loading cache...")
+        print("conky_version_gs: Loading to cache...")
         local fnret = _command("gnome-shell --version", 0)
         local version, _ = string.gsub(fnret, "GNOME Shell ", "")
         local session_type = "Xorg (X11)"
