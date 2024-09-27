@@ -166,6 +166,17 @@ function _add_attribute_value(table, attribute, value)
     return table
 end
 
+function _split(s, delimiter)
+    delimiter = delimiter or ","
+    local t = {}
+    local i = 1
+    for str in string.gmatch(s, "([^" .. delimiter .. "]+)") do
+        t[i] = str
+        i = i + 1
+    end
+    return t
+end
+
 -- conky display functions
 
 function _table_format(items)
@@ -302,6 +313,22 @@ function conky_cpu()
 end
 
 function conky_temperature()
+    if io.open("/sys/class/hwmon/hwmon" .. helper.config.temperature.sensor_device .. "/temp" .. helper.config.temperature.sensor_type .. "_input", "r") == nil then
+        print("conky_temperature: wrong sensor device (" .. helper.config.temperature.sensor_device .. ") and/or sensor type (" .. helper.config.temperature.sensor_type .. "). Trying to fix...")
+        local fnret = _command("ls /sys/class/hwmon/hwmon*/temp*_input -1", 0)
+        if fnret then
+            fnret = string.gsub(fnret, "^/sys/class/hwmon/hwmon([0-9]+)/temp([0-9]+)_input$", "%1,%2")
+        end
+        if not fnret or not _split(fnret)[2] then
+            return {
+                key = "Temp",
+                value = "N/A"
+            }
+        end
+        helper.config.temperature.sensor_device = _split(fnret)[1]
+        helper.config.temperature.sensor_type = _split(fnret)[2]
+        print("conky_temperature: sensor device and sensor type configuration fixed to respective values " .. helper.config.temperature.sensor_device .. " and " .. helper.config.temperature.sensor_type)
+    end
     return {
         key = "Temp",
         value = "${hwmon " .. helper.config.temperature.sensor_device .. " temp " .. helper.config.temperature.sensor_type .. "} °C"
@@ -354,7 +381,7 @@ end
 function conky_power()
     local label = "Battery"
     if io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") == nil and io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") == nil then
-        return conky_arch() -- not a laptop, let's fall back to something else
+        return conky_arch() -- not a laptop or no battery connected for the moment, let's fall back to something else
     end
     local battery_percent = conky_parse("${battery_percent}")
     local acpi_ac_adapter = conky_parse("${acpiacadapter}")
