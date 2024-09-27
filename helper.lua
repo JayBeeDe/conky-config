@@ -2,7 +2,7 @@
 
 -- config management functions
 local config
-local cache
+local cache = {}
 
 function _load_config(path)
     local _env = {}
@@ -22,7 +22,6 @@ function conky_startup()
     local config_path = os.getenv("PWD") .. "/" .. conky_config
     print("conky: Loading config from " .. config_path .. "...")
     config = _load_config(config_path)
-    cache = {}
     print("conky: Script has started and is now runing!")
 end
 
