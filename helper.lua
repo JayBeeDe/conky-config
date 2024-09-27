@@ -287,9 +287,17 @@ function conky_memory()
 end
 
 function conky_cpu()
+    local cpu_usage = conky_parse("${cpu}")
+    local suffix = "   "
+    if tonumber(cpu_usage) and tonumber(cpu_usage) < 100 then
+        suffix = suffix .. " "
+    end
+    if tonumber(cpu_usage) and tonumber(cpu_usage) < 10 then
+        suffix = suffix .. " "
+    end
     return {
         key = "CPU",
-        value = "${cpu} %  @${freq_g} GHz"
+        value = cpu_usage .. " %" .. suffix .. "@${freq_g} GHz"
     }
 end
 
