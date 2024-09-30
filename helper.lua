@@ -137,10 +137,11 @@ function _file(path, mode, lines)
 end
 
 function _file_read(path, idx)
-    if idx then
-        return _file(path, "r")[idx + 1]
+    local fnret = _file(path, "r")
+    if idx and fnret ~= nil then
+        return fnret[idx + 1]
     end
-    return _file(path, "r")
+    return fnret
 end
 
 function _command(cmd, idx)
@@ -244,10 +245,11 @@ function conky_display(...)
     local fnrets = {}
     for _, function_name in pairs({...}) do
         local fnret = _G["conky_" .. function_name]()
-        if #fnret and #fnret > 0 then
+        if fnret ~= nil and #fnret and #fnret > 0 then
             fnrets = _merge(fnrets, fnret)
-        else
+        elseif fnret ~= nil and fnret.key ~= nil and fnret.value ~= nil then
             fnrets[#fnrets + 1] = fnret
+
         end
     end
     return _table_format(fnrets)
@@ -275,6 +277,9 @@ function conky_uptime()
     local current_timestamp = os.time(os.date("*t"))
 
     local fnret = _file_read("/proc/uptime", 0)
+    if fnret == nil then
+        return conky_parse("$uptime")
+    end
     local uptime_sec, _ = string.gsub(fnret, "%..*", "")
     uptime_sec = tonumber(uptime_sec)
 
