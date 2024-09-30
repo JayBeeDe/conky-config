@@ -1,6 +1,6 @@
-# conky-scripts
+# conky-config
 
-Lua helper for conky script
+Full Lua Conky configuration
 
 ![Screenshot](screenshot.png)
 
@@ -29,7 +29,7 @@ Clone this repo to `~/.config/conky/JayBeeDe`
 
 ```bash
 sudo apt-get install jq fonts-font-awesome lua-json lua-socket lua-sec mokutil
-git clone git@github.com:JayBeeDe/conky-scripts.git ~/.config/conky/JayBeeDe
+git clone git@github.com:JayBeeDe/conky-config.git ~/.config/conky/JayBeeDe
 ln -s ~/.config/conky/JayBeeDe ~/.config/conky/default
 ```
 
