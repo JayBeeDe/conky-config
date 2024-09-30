@@ -255,7 +255,7 @@ function _get_header(title)
     local margin_horizontal = helper.config.margin_horizontal
     local margin_vertical = helper.config.margin_vertical
     local maximum_width = conky.config.maximum_width
-    local title_position = math.floor(maximum_width / 2) - math.ceil(string.len(title) / max_chars * maximum_width)
+    local title_position = math.floor((maximum_width - math.ceil(string.len(title) / max_chars * maximum_width)) / 2)
 
     return conky_parse("${offset 8}${goto " .. title_position .. "}$font7$color0~$color " .. title .. " $color0~$color${voffset " .. margin_vertical .. "}")
 end
@@ -342,11 +342,11 @@ function conky_auction()
 
     local prefix = conky_parse("$font6${color0}") .. symbol .. conky_parse("${offset 8}$color")
     if diff < 0 then
-        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color2$font0  $font9") .. diff .. currency .. conky_parse("$font9${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color2$font0  $font9") .. diff .. currency .. conky_parse("$font9$color")
     elseif diff > 0 then
-        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color1$font0  $font9") .. diff .. currency .. conky_parse("$font9${voffset 10}$color")
+        return prefix .. regularMarketPrice .. currency .. conky_parse("$color$font${voffset -10}${font9}$color1$font0  $font9") .. diff .. currency .. conky_parse("$font9$color")
     else
-        return prefix .. regularMarketPrice .. currency
+        return prefix .. regularMarketPrice .. currency .. conky_parse("${offset 30}")
     end
 end
 
