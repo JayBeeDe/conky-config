@@ -51,7 +51,7 @@ function _sec_to_human(time)
     if minutes > 0 and days == 0 then
         str = str .. minutes .. "m "
     end
-    if seconds > 0 and minutes == 0 then
+    if seconds > 0 and hours == 0 and days == 0 then
         str = str .. seconds .. "s "
     end
     return string.gsub(str, " $", "")
@@ -95,6 +95,9 @@ function _query(url, method)
 
     if type(fnret) == "string" then
         fnret = json.decode(fnret)
+    end
+    if not fnret then
+        return fnret
     end
     cache.query[query_id] = fnret
     print("_query: Loading " .. method .. " " .. url .. " result to cache...")
@@ -155,6 +158,9 @@ function _command(cmd, idx)
         end
     end
     handle:close()
+    if #fnret == 0 then
+        return nil
+    end
     return fnret
 end
 
@@ -197,6 +203,9 @@ function _table_has_value(tab, val)
 end
 
 function _add_attribute_value(table, attribute, value)
+    if not table then
+        return {}
+    end
     for _, item in ipairs(table) do
         item[attribute] = (item.attribute and item.attribute or value)
     end
@@ -241,7 +250,17 @@ function _table_format(items)
     return str_output
 end
 
-function conky_display(...)
+function _get_header(title)
+    local max_chars = helper.config.maximum_chars
+    local margin_horizontal = helper.config.margin_horizontal
+    local margin_vertical = helper.config.margin_vertical
+    local maximum_width = conky.config.maximum_width
+    local title_position = math.floor(maximum_width / 2) - math.ceil(string.len(title) / max_chars * maximum_width)
+
+    return conky_parse("${offset 8}${goto " .. title_position .. "}$font7$color0~$color " .. title .. " $color0~$color${voffset " .. margin_vertical .. "}")
+end
+
+function conky_display(title, ...)
     local fnrets = {}
     for _, function_name in pairs({...}) do
         local fnret = _G["conky_" .. function_name]()
@@ -249,10 +268,12 @@ function conky_display(...)
             fnrets = _merge(fnrets, fnret)
         elseif fnret and fnret.key and fnret.value then
             fnrets[#fnrets + 1] = fnret
-
         end
     end
-    return _table_format(fnrets)
+    if #fnrets == 0 then
+        return conky_parse("${voffset -" .. (helper.config.margin_vertical - 5) .. "}")
+    end
+    return _get_header(title) .. _table_format(fnrets)
 end
 
 function _debug_dump(o)
@@ -284,6 +305,9 @@ function conky_uptime()
     uptime_sec = tonumber(uptime_sec)
 
     fnret = _command("journalctl -u sleep.target MESSAGE=\"Stopped target Sleep.\" -o json -n 1 --no-pager", 0)
+    if not fnret then
+        return conky_parse("$uptime")
+    end
     if type(fnret) == "string" then
         fnret = json.decode(fnret)
     end
@@ -303,7 +327,11 @@ end
 
 function conky_auction()
     local url = "https://query1.finance.yahoo.com/v8/finance/chart/" .. helper.config.auction.code .. "?region=" .. helper.config.auction.region .. "&lang=" .. helper.config.auction.language .. "&interval=1m&range=1h"
-    local fnret = _query_get(url).chart.result
+    local fnret = _query_get(url)
+    if not fnret or not fnret.chart or not fnret.chart.result then
+        return ""
+    end
+    fnret = fnret.chart.result
 
     local regularMarketPrice = fnret[1].meta.regularMarketPrice
     local previousClose = fnret[1].meta.previousClose
@@ -344,6 +372,9 @@ function conky_storage_partitions()
     local storage = {}
     local json = require("json")
     local fnret = _command("lsblk -J -n -p -l -x MOUNTPOINT -O | jq -cM", 0)
+    if not fnret then
+        return nil
+    end
     if type(fnret) == "string" then
         fnret = json.decode(fnret)
     end
@@ -421,11 +452,8 @@ function conky_temperature()
         if fnret then
             fnret = string.gsub(fnret, "^/sys/class/hwmon/hwmon([0-9]+)/temp([0-9]+)_input$", "%1,%2")
         end
-        if not fnret or not _split(fnret)[2] then
-            return {
-                key = "Temp",
-                value = "N/A"
-            }
+        if not fnret then
+            return nil
         end
         helper.config.temperature.sensor_device = _split(fnret)[1]
         helper.config.temperature.sensor_type = _split(fnret)[2]
@@ -461,9 +489,13 @@ end
 function conky_version_os()
     if not cache.version_os then
         print("conky_version_os: Loading to cache...")
+        local fnret = _command("lsb_release -ds", 0)
+        if not fnret then
+            return nil
+        end
         cache.version_os = {
             key = "OS",
-            value = _command("lsb_release -ds", 0)
+            value = fnret
         }
     end
     return cache.version_os
@@ -517,9 +549,13 @@ end
 function conky_arch()
     if not cache.arch then
         print("conky_arch: Loading to cache...")
+        local fnret = _command("arch", 0)
+        if not fnret then
+            return nil
+        end
         cache.arch = {
             key = "Arch",
-            value = _command("arch", 0)
+            value = fnret
         }
     end
     return cache.arch
@@ -529,6 +565,9 @@ function conky_version_gs()
     if not cache.version_gs then
         print("conky_version_gs: Loading to cache...")
         local fnret = _command("gnome-shell --version", 0)
+        if not fnret then
+            return nil
+        end
         local version, _ = string.gsub(fnret, "GNOME Shell ", "")
         local session_type = "Xorg (X11)"
         if (os.getenv("XDG_SESSION_TYPE") == "wayland") then
@@ -573,6 +612,9 @@ function conky_local_ip(version)
 
     local json = require("json")
     local fnret = _command("ip -j address", 0)
+    if not fnret then
+        return nil
+    end
     local net_interfaces = fnret
     if type(fnret) == "string" then
         net_interfaces = json.decode(fnret)
@@ -620,11 +662,14 @@ end
 
 function _nic_aliases()
     local json = require("json")
+    local nic_aliases = {}
     local fnretNICs = _command("ip -j link", 0)
+    if not fnretNICs then
+        return nic_aliases
+    end
     if type(fnretNICs) == "string" then
         fnretNICs = json.decode(fnretNICs)
     end
-    local nic_aliases = {}
     for _, nic in ipairs(fnretNICs) do
         local if_name = nil
         if string.match(nic.ifname, "^enx.*$") then
@@ -646,7 +691,7 @@ function conky_local_routes(version)
     local nic_aliases = _nic_aliases()
 
     local json = require("json")
-    local fnretRoutesv4 = _command("ip -j route", 0)
+    local fnretRoutesv4 = _command("ipss -j route", 0)
     if type(fnretRoutesv4) == "string" then
         fnretRoutesv4 = json.decode(fnretRoutesv4)
     end
