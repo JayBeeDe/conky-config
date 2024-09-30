@@ -31,7 +31,7 @@ function conky_startup()
 end
 
 function conky_main()
-    if conky_window == nil then
+    if not conky_window then
         return
     end
 end
@@ -76,7 +76,7 @@ function _query(url, method)
 
     local fnret = ""
     function collect(chunk)
-        if chunk ~= nil then
+        if chunk then
             fnret = fnret .. chunk
         end
         return true
@@ -117,7 +117,7 @@ function _file(path, mode, lines)
         return nil
     end
     if mode == "r" then
-        if lines ~= nil then
+        if lines then
             return nil
         end
         lines = {}
@@ -125,7 +125,7 @@ function _file(path, mode, lines)
             lines[#lines + 1] = line
         end
     else
-        if lines == nil then
+        if not lines then
             return nil
         end
         for _, line in ipairs(lines) do
@@ -138,7 +138,7 @@ end
 
 function _file_read(path, idx)
     local fnret = _file(path, "r")
-    if idx and fnret ~= nil then
+    if idx and fnret then
         return fnret[idx + 1]
     end
     return fnret
@@ -163,7 +163,7 @@ function _currency2smbol(currency)
         EUR = "€", --
         DOL = "$"
     }
-    if currency2smbol[currency] == nil then
+    if not currency2smbol[currency] then
         return ""
     end
     return currency2smbol[currency]
@@ -245,9 +245,9 @@ function conky_display(...)
     local fnrets = {}
     for _, function_name in pairs({...}) do
         local fnret = _G["conky_" .. function_name]()
-        if fnret ~= nil and #fnret and #fnret > 0 then
+        if fnret and #fnret and #fnret > 0 then
             fnrets = _merge(fnrets, fnret)
-        elseif fnret ~= nil and fnret.key ~= nil and fnret.value ~= nil then
+        elseif fnret and fnret.key and fnret.value then
             fnrets[#fnrets + 1] = fnret
 
         end
@@ -277,7 +277,7 @@ function conky_uptime()
     local current_timestamp = os.time(os.date("*t"))
 
     local fnret = _file_read("/proc/uptime", 0)
-    if fnret == nil then
+    if not fnret then
         return conky_parse("$uptime")
     end
     local uptime_sec, _ = string.gsub(fnret, "%..*", "")
@@ -288,7 +288,7 @@ function conky_uptime()
         fnret = json.decode(fnret)
     end
     local awake_timestamp = fnret["_SOURCE_REALTIME_TIMESTAMP"]
-    if awake_timestamp == nil then
+    if not awake_timestamp then
         return _sec_to_human(uptime_sec)
     else
         awake_timestamp = math.ceil((tonumber(awake_timestamp) / 1000000) - 0.5)
@@ -415,7 +415,7 @@ function conky_cpu()
 end
 
 function conky_temperature()
-    if io.open("/sys/class/hwmon/hwmon" .. helper.config.temperature.sensor_device .. "/temp" .. helper.config.temperature.sensor_type .. "_input", "r") == nil then
+    if not io.open("/sys/class/hwmon/hwmon" .. helper.config.temperature.sensor_device .. "/temp" .. helper.config.temperature.sensor_type .. "_input", "r") then
         print("conky_temperature: wrong sensor device (" .. helper.config.temperature.sensor_device .. ") and/or sensor type (" .. helper.config.temperature.sensor_type .. "). Trying to fix...")
         local fnret = _command("ls /sys/class/hwmon/hwmon*/temp*_input -1", 0)
         if fnret then
@@ -482,7 +482,7 @@ end
 
 function conky_power()
     local label = "Battery"
-    if io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") == nil and io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") == nil then
+    if not io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") and not io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") then
         return conky_arch() -- not a laptop or no battery connected for the moment, let's fall back to something else
     end
     local battery_percent = conky_parse("${battery_percent}")
@@ -547,7 +547,7 @@ function conky_local_ip(version)
     local family = (version and "inet" .. (version == 6 and version or "") or "inet")
     local ips = {}
 
-    if (version == nil or version == 4) then
+    if (not version or version == 4) then
         local fnretIp4 = _query_get("https://api.ipify.org/?format=json")
         if fnretIp4 then
             ips[#ips + 1] = {
@@ -558,7 +558,7 @@ function conky_local_ip(version)
         end
     end
 
-    if (version == nil or version == 6) then
+    if (not version or version == 6) then
         local fnretIp6 = _query_get("https://api64.ipify.org/?format=json")
         if fnretIp6 then
             ips[#ips + 1] = {
@@ -582,18 +582,18 @@ function conky_local_ip(version)
             local if_name = net_interface.ifname
             local addr_infos = net_interface.addr_info
             for k, addr_info in ipairs(addr_infos) do
-                if addr_info["local"] ~= nil and addr_info.scope == "global" and (version == nil or addr_info.family == family) then
+                if addr_info["local"] and addr_info.scope == "global" and (not version or addr_info.family == family) then
                     local ip = {}
                     ip.key = if_name
-                    if addr_info.label ~= nil then
+                    if addr_info.label then
                         ip.key = addr_info.label
                     end
                     if nic_aliases[ip.key] then
                         ip.key = nic_aliases[ip.key]
                     end
-                    if version == nil and addr_info.family == "inet6" then
+                    if not version and addr_info.family == "inet6" then
                         ip.version = 6
-                    elseif version == nil then
+                    elseif not version then
                         ip.version = 4
                     end
                     ip.value = addr_info["local"] .. "/" .. addr_info.prefixlen
