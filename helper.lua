@@ -691,7 +691,7 @@ function conky_local_routes(version)
     local nic_aliases = _nic_aliases()
 
     local json = require("json")
-    local fnretRoutesv4 = _command("ipss -j route", 0)
+    local fnretRoutesv4 = _command("ip -j route", 0)
     if type(fnretRoutesv4) == "string" then
         fnretRoutesv4 = json.decode(fnretRoutesv4)
     end
