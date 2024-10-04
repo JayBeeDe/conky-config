@@ -192,14 +192,33 @@ function _merge(...)
     return result
 end
 
-function _table_has_value(tab, val)
-    for _, value in ipairs(tab) do
-        if value == val then
-            return true
+function _shall_display(item, blacklist)
+    for blacklist_attribute, blacklist_value in pairs(blacklist) do
+        if type(item[blacklist_attribute]) == "function" then
+            item[blacklist_attribute] = nil
+        end
+        if blacklist_value == "" then
+            if not item[blacklist_attribute] and blacklist_value == "" then
+                return false
+            end
+        elseif item[blacklist_attribute] then
+
+            if type(item[blacklist_attribute]) == "string" and type(blacklist_value) == "string" then
+                if string.match(item[blacklist_attribute], blacklist_value) then
+                    return false
+                end
+            elseif type(item[blacklist_attribute]) == "table" and type(blacklist_value) == "table" then
+                for _, blacklist_value_item in pairs(blacklist_value) do -- browse each blacklist item
+                    for _, item_blacklist_attribute_item in pairs(item[blacklist_attribute]) do -- browse each item attribute sub item
+                        if string.match(item_blacklist_attribute_item, blacklist_value_item) then
+                            return false
+                        end
+                    end
+                end
+            end
         end
     end
-
-    return false
+    return true
 end
 
 function _add_attribute_value(table, attribute, value)
@@ -348,24 +367,6 @@ function conky_auction()
     else
         return prefix .. regularMarketPrice .. currency .. conky_parse("${offset 30}")
     end
-end
-
-function _shall_display(item, blacklist)
-    for blacklist_attribute, blacklist_value in pairs(blacklist) do
-        if type(item[blacklist_attribute]) == "function" then
-            item[blacklist_attribute] = nil
-        end
-        if blacklist_value == "" then
-            if not item[blacklist_attribute] and blacklist_value == "" then
-                return false
-            end
-        else
-            if string.match(item[blacklist_attribute], blacklist_value) then
-                return false
-            end
-        end
-    end
-    return true
 end
 
 function conky_storage_partitions()
@@ -594,7 +595,7 @@ function conky_version_gs()
     return cache.version_gs
 end
 
-function conky_local_ip(version)
+function conky_network_ip(version)
     local family = (version and "inet" .. (version == 6 and version or "") or "inet")
     local ips = {}
 
@@ -636,7 +637,7 @@ function conky_local_ip(version)
             local if_name = net_interface.ifname
             local addr_infos = net_interface.addr_info
             for k, addr_info in ipairs(addr_infos) do
-                if addr_info["local"] and addr_info.scope == "global" and (not version or addr_info.family == family) then
+                if (not version or addr_info.family == family) and _shall_display(addr_info, helper.config.network_ip.black_list) == true then
                     local ip = {}
                     ip.key = if_name
                     if addr_info.label then
@@ -697,7 +698,7 @@ function _nic_aliases()
     return nic_aliases
 end
 
-function conky_local_routes(version)
+function conky_network_routes(version)
     local routes = {}
 
     local nic_aliases = _nic_aliases()
@@ -716,7 +717,7 @@ function conky_local_routes(version)
     local net_routes = _merge(net_routesv4, net_routesv6)
     table.sort(net_routes, _sort_routes)
     for k, net_route in ipairs(net_routes) do
-        if not _table_has_value(net_route.flags, "linkdown") and net_route.dev ~= "lo" and (not version or net_route.version == version) then
+        if (not version or net_route.version == version) and _shall_display(net_route, helper.config.network_routes.black_list) == true then
             local route = {}
             route.key = net_route.dev
             if nic_aliases[route.key] then
