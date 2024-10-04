@@ -486,6 +486,18 @@ function conky_boot()
     return cache.boot
 end
 
+function conky_version_bios()
+    if not cache.version_bios then
+        print("conky_version_bios: Loading to cache...")
+        local fnret = _file_read("/sys/devices/virtual/dmi/id/bios_version", 0)
+        cache.version_bios = {
+            key = "Bios",
+            value = fnret
+        }
+    end
+    return cache.version_bios
+end
+
 function conky_version_os()
     if not cache.version_os then
         print("conky_version_os: Loading to cache...")
@@ -515,7 +527,7 @@ end
 function conky_power()
     local label = "Battery"
     if not io.open("/proc/acpi/battery/" .. helper.config.power.battery, "r") and not io.open("/sys/class/power_supply/" .. helper.config.power.battery, "r") then
-        return conky_arch() -- not a laptop or no battery connected for the moment, let's fall back to something else
+        return conky_boot() -- not a laptop or no battery connected for the moment, let's fall back to something else
     end
     local battery_percent = conky_parse("${battery_percent}")
     local acpi_ac_adapter = conky_parse("${acpiacadapter}")
