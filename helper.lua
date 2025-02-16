@@ -611,7 +611,7 @@ function conky_network_ip(version)
     end
 
     if (not version or version == 6) then
-        local fnretIp6 = _query_get("https://api64.ipify.org/?format=json")
+        local fnretIp6 = _query_get("https://api6.ipify.org/?format=json")
         if fnretIp6 then
             ips[#ips + 1] = {
                 value = fnretIp6.ip .. "/128",
