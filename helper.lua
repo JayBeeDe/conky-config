@@ -393,6 +393,7 @@ function conky_storage_partitions()
             if type(item.fssize) == "function" then
                 item.fssize = item.size
             end
+            item.mountpoint = string.gsub(item.mountpoint, os.getenv("HOME"), "~")
             storage[#storage + 1] = {
                 key = item.mountpoint,
                 value = item.fstype .. " " .. item.type .. ", " .. item.fsused .. " / " .. item.fssize .. " (" .. item["fsuse%"] .. ")"
